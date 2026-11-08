@@ -42,7 +42,7 @@ export class AdminService {
 
   /** Editors approve or reject. Approval makes the book purchasable. */
   async decideBook(adminId: string, bookId: string, decision: "APPROVE" | "REJECT" | "PUBLISH" | "UNPUBLISH", reason?: string) {
-    const book = await this.prisma.book.findUnique({ where: { id: bookId } });
+    const book = await this.prisma.book.findUnique({ where: { id: bookId }, include: { formats: true } });
     if (!book) throw new NotFoundException("Book not found");
 
     const transitions: Record<string, { from: string[]; to: string }> = {
@@ -56,6 +56,13 @@ export class AdminService {
       throw new BadRequestException(`Cannot ${decision.toLowerCase()} a book in status ${book.status}`);
     }
     if (decision === "REJECT" && !reason) throw new BadRequestException("A reason is required to reject");
+    if (decision === "APPROVE" || decision === "PUBLISH") {
+      if (!book.coverUrl) throw new BadRequestException("Book has no cover image");
+      if (!book.formats.length) throw new BadRequestException("Book has no formats");
+      if (book.formats.some((f) => f.isDigital && !f.filePath)) {
+        throw new BadRequestException("A digital format has no uploaded file");
+      }
+    }
 
     const updated = await this.prisma.book.update({
       where: { id: bookId },

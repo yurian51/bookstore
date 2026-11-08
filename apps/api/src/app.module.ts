@@ -11,6 +11,7 @@ import { ReviewsModule } from "./reviews/reviews.module";
 import { AuthorsModule } from "./authors/authors.module";
 import { AdminModule } from "./admin/admin.module";
 import { AccountModule } from "./account/account.module";
+import { StorageModule } from "./storage/storage.module";
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AccountModule } from "./account/account.module";
     AuthorsModule,
     AdminModule,
     AccountModule,
+    StorageModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

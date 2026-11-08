@@ -51,12 +51,12 @@ These are deliberate stubs. Each has a single place to replace.
 | Google sign-in | Env keys exist, no OAuth route. | Add a passport/OIDC flow that links `User.googleId`. |
 | Email verification and notifications | Not sent. | Add a mailer service and a verification step. |
 | Search | PostgreSQL `contains` queries. | Swap in OpenSearch behind `CatalogService` for relevance and typo tolerance. |
-| File storage | Local `STORAGE_DIR`. | Implement an S3-compatible storage adapter. |
+| File storage | Local `STORAGE_DIR`. Uploads are sniffed by content (magic bytes), stored under server-generated names, and only digital files are served through signed links. | Implement an S3-compatible adapter behind `StorageService`. Add malware scanning for uploads. |
 | Exchange rates | Table exists, no feed. | Add a rate provider job that writes `ExchangeRate`. |
 | Shipping | Single flat fee per zone. | Integrate carrier rate APIs. |
 | AI recommendations | Not built. Spec requires no invented book data. | Start with co-purchase and category heuristics. |
-| Author/vendor/publisher dashboards | Author dashboard and sales summary exist. Vendor inventory, refund, and withdrawal UIs are not built. | Build remaining dashboard pages on the existing API pattern. |
-| Admin UI | Overview page only. Review queue and reports are API-only. | Build review, user, and report pages. |
+| Author dashboard | Apply, create book, add formats, upload files and cover, submit for review, sales by currency. | Vendor inventory, refund, and withdrawal UIs are not built. |
+| Admin UI | Overview and review queue (approve, reject, publish). User management and reports are API-only. | Build user and report pages. |
 | Internationalization | Locale is stored; UI strings are English. | Add an i18n catalog and translate. |
 | Mobile apps, PWA | Not built. | Add manifest and service worker for PWA. |
 

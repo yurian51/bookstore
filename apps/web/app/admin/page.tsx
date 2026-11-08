@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { api, ApiError } from "@/lib/api";
-import { formatMoney } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +33,13 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-10">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="font-serif text-3xl">Administration</h1>
-        <Link href="/admin/review" className="btn-primary">Review queue ({o.pendingBookApprovals})</Link>
+        <nav className="flex flex-wrap gap-2 text-sm">
+          <Link href="/admin/review" className="btn-primary">Review queue ({o.pendingBookApprovals})</Link>
+          <Link href="/admin/orders" className="btn-ghost">Orders & refunds</Link>
+          <Link href="/admin/users" className="btn-ghost">Users</Link>
+        </nav>
       </header>
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map(([label, value]) => (

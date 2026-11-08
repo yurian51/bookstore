@@ -14,8 +14,7 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next: str
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const form = new FormData(e.currentTarget);
-    const payload = Object.fromEntries(form.entries());
+    const payload = Object.fromEntries(new FormData(e.currentTarget).entries());
     try {
       const res = await fetch(`${API}/api/auth/${mode}`, {
         method: "POST",
@@ -25,7 +24,7 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next: str
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(typeof data.message === "string" ? data.message : "Something went wrong. Check your details and try again.");
+        setError(typeof data.message === "string" ? data.message : "Check your details and try again.");
         return;
       }
       router.push(next);
@@ -36,17 +35,25 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next: str
   }
 
   return (
-    <form onSubmit={submit} className="mt-8 space-y-4">
-      {mode === "register" && (
-        <Field name="name" label="Full name" autoComplete="name" required />
-      )}
-      <Field name="email" label="Email" type="email" autoComplete="email" required />
-      <Field name="password" label="Password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} />
-      {mode === "register" && (
-        <input type="hidden" name="country" value="TZ" />
-      )}
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      <button className="btn-primary w-full" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}</button>
+    <div className="mt-8 space-y-4">
+      <form onSubmit={submit} className="space-y-4">
+        {mode === "register" && <Field name="name" label="Full name" autoComplete="name" required />}
+        <Field name="email" label="Email" type="email" autoComplete="email" required />
+        <Field name="password" label="Password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} />
+        {mode === "register" && <input type="hidden" name="country" value="TZ" />}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        <button className="btn-primary w-full" disabled={busy}>
+          {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+        </button>
+      </form>
+
+      <div className="flex items-center gap-3 text-xs text-ink/50 dark:text-white/50">
+        <span className="h-px flex-1 bg-ink/10 dark:bg-white/10" />or<span className="h-px flex-1 bg-ink/10 dark:bg-white/10" />
+      </div>
+      <a href={`${API}/api/auth/google?next=${encodeURIComponent(next)}`} className="btn-ghost w-full">
+        Continue with Google
+      </a>
+
       <p className="text-center text-sm">
         {mode === "login" ? (
           <>New here? <Link href="/register" className="underline">Create an account</Link></>
@@ -54,7 +61,7 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next: str
           <>Already have an account? <Link href="/login" className="underline">Sign in</Link></>
         )}
       </p>
-    </form>
+    </div>
   );
 }
 

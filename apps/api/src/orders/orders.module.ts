@@ -1,12 +1,13 @@
 import { Module } from "@nestjs/common";
 import { OrdersService } from "./orders.service";
 import { OrdersController } from "./orders.controller";
+import { PaymentWebhookController } from "./payment-webhook.controller";
 import { PricingService } from "./pricing.service";
 import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [PaymentsModule],
-  controllers: [OrdersController],
+  controllers: [OrdersController, PaymentWebhookController],
   providers: [OrdersService, PricingService],
   exports: [OrdersService, PricingService],
 })

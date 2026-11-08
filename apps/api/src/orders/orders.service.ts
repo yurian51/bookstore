@@ -147,6 +147,96 @@ export class OrdersService {
     return this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
   }
 
+  /** Called only after the webhook signature is verified. Amount must match what we charged. */
+  async markPaidByProviderRef(providerRef: string, amountMinor: number, currency: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { providerRef } });
+    if (!payment) throw new NotFoundException("Unknown payment reference");
+    if (payment.amountMinor !== amountMinor || payment.currency !== currency) {
+      throw new BadRequestException("Payment amount does not match the order");
+    }
+    await this.prisma.payment.update({ where: { id: payment.id }, data: { status: "SUCCEEDED" } });
+    return this.markPaid(payment.orderId);
+  }
+
+  async markFailedByProviderRef(providerRef: string) {
+    await this.prisma.payment.updateMany({ where: { providerRef, status: "PENDING" }, data: { status: "FAILED" } });
+    return { ok: true };
+  }
+
+  /**
+   * Full or partial refund through the payment provider. Revokes digital access
+   * only when the order is fully refunded. Every refund is written to the audit log.
+   */
+  async refund(orderNumber: string, amountMinor: number | undefined, reason: string, actorId: string) {
+    if (!reason || reason.trim().length < 3) throw new BadRequestException("A refund reason is required");
+    if (amountMinor !== undefined && (!Number.isInteger(amountMinor) || amountMinor <= 0)) {
+      throw new BadRequestException("Invalid refund amount");
+    }
+    const order = await this.prisma.order.findUnique({ where: { number: orderNumber }, include: { payments: true } });
+    if (!order) throw new NotFoundException("Order not found");
+    if (!["PAID", "FULFILLED", "SHIPPED", "DELIVERED"].includes(order.status)) {
+      throw new BadRequestException("Only paid orders can be refunded");
+    }
+    const payment = order.payments.find((p) => p.status === "SUCCEEDED" && !!p.providerRef);
+    if (!payment?.providerRef) throw new BadRequestException("No captured payment found for this order");
+
+    const agg = await this.prisma.refund.aggregate({ where: { orderId: order.id }, _sum: { amountMinor: true } });
+    const alreadyRefunded = agg._sum.amountMinor ?? 0;
+    const remaining = order.totalMinor - alreadyRefunded;
+    if (remaining <= 0) throw new BadRequestException("Order is already fully refunded");
+    const amount = amountMinor ?? remaining;
+    if (amount > remaining) throw new BadRequestException("Refund exceeds the remaining balance");
+
+    const result = await this.payments.refund(payment.providerRef, amount);
+    const full = alreadyRefunded + amount >= order.totalMinor;
+
+    await this.prisma.$transaction([
+      this.prisma.refund.create({
+        data: { orderId: order.id, amountMinor: amount, reason: reason.trim(), status: "COMPLETED" },
+      }),
+      this.prisma.order.update({ where: { id: order.id }, data: { status: full ? "REFUNDED" : order.status } }),
+      this.prisma.payment.update({ where: { id: payment.id }, data: { status: full ? "REFUNDED" : "SUCCEEDED" } }),
+      ...(full
+        ? [this.prisma.libraryEntry.updateMany({ where: { orderId: order.id }, data: { revokedAt: new Date() } })]
+        : []),
+      this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: "ORDER_REFUND",
+          entityType: "Order",
+          entityId: order.id,
+          meta: { amountMinor: amount, fullyRefunded: full, providerRefundRef: result.refundRef, reason: reason.trim() },
+        },
+      }),
+    ]);
+    return { amountMinor: amount, fullyRefunded: full };
+  }
+
+  async listAll(q?: string) {
+    const where = q
+      ? {
+          OR: [
+            { number: { contains: q, mode: "insensitive" as const } },
+            { user: { email: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {};
+    return this.prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        number: true,
+        status: true,
+        currency: true,
+        totalMinor: true,
+        createdAt: true,
+        user: { select: { email: true } },
+        refunds: { select: { amountMinor: true } },
+      },
+    });
+  }
+
   async listForUser(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },

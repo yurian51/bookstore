@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -12,6 +12,7 @@ import { AuthorsModule } from "./authors/authors.module";
 import { AdminModule } from "./admin/admin.module";
 import { AccountModule } from "./account/account.module";
 import { StorageModule } from "./storage/storage.module";
+import { OriginCheckMiddleware } from "./common/origin.middleware";
 
 @Module({
   imports: [
@@ -30,4 +31,8 @@ import { StorageModule } from "./storage/storage.module";
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(OriginCheckMiddleware).forRoutes("*");
+  }
+}

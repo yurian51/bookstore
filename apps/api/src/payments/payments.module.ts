@@ -11,7 +11,10 @@ import { config } from "../config/config";
       useFactory: (): PaymentProvider => {
         switch (config.paymentProvider) {
           case "stripe":
-            return new StripePaymentProvider(process.env.STRIPE_SECRET_KEY ?? "");
+            return new StripePaymentProvider(
+              process.env.STRIPE_SECRET_KEY ?? "",
+              process.env.STRIPE_WEBHOOK_SECRET ?? "",
+            );
           default:
             return new SandboxPaymentProvider();
         }

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AdminService } from "./admin.service";
+import { OrdersService } from "../orders/orders.service";
 import { RequireAuth } from "../common/auth.decorator";
 import { Roles, RolesGuard } from "../common/roles";
 
@@ -8,7 +9,7 @@ import { Roles, RolesGuard } from "../common/roles";
 @UseGuards(RolesGuard)
 @Roles("ADMIN", "EDITOR", "FINANCE", "SUPPORT")
 export class AdminController {
-  constructor(private admin: AdminService) {}
+  constructor(private admin: AdminService, private orders: OrdersService) {}
 
   @Get("overview")
   overview() {
@@ -49,6 +50,18 @@ export class AdminController {
   @Roles("ADMIN")
   roles(@Req() req: any, @Param("id") id: string, @Body() body: { roles: string[] }) {
     return this.admin.setRoles(req.user.id, id, body.roles);
+  }
+
+  @Get("orders")
+  @Roles("ADMIN", "FINANCE", "SUPPORT")
+  listOrders(@Query("q") q?: string) {
+    return this.orders.listAll(q);
+  }
+
+  @Post("orders/:number/refund")
+  @Roles("ADMIN", "FINANCE")
+  refund(@Req() req: any, @Param("number") number: string, @Body() body: { amountMinor?: number; reason: string }) {
+    return this.orders.refund(number, body.amountMinor, body.reason, req.user.id);
   }
 
   @Get("reports/commission")

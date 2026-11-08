@@ -1,0 +1,628 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  AUTHOR
+  PUBLISHER
+  VENDOR
+  EDITOR
+  SUPPORT
+  FINANCE
+  ADMIN
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BookStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum FormatType {
+  PHYSICAL
+  PDF
+  EPUB
+  AUDIOBOOK
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FULFILLED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum ShipmentStatus {
+  PREPARING
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String?
+  googleId        String?   @unique
+  name            String
+  country         String    @default("TZ")
+  preferredLang   String    @default("en")
+  emailVerifiedAt DateTime?
+  disabledAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  roles           UserRole[]
+  profile         AuthorProfile?
+  vendor          Vendor?
+  cart            Cart?
+  orders          Order[]
+  wishlist        WishlistItem[]
+  library         LibraryEntry[]
+  reviews         Review[]
+  addresses       Address[]
+  progress        ReadingProgress[]
+  bookmarks       Bookmark[]
+  notifications   Notification[]
+  sessions        Session[]
+  auditLogs       AuditLog[]        @relation("actor")
+  subscriptions   Subscription[]
+  payoutRequests  PayoutRequest[]
+}
+
+model UserRole {
+  id      String @id @default(cuid())
+  userId  String
+  role    Role
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthorProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String
+  bio         String?
+  country     String?
+  website     String?
+  photoUrl    String?
+  verified    Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  books       BookAuthor[]
+  createdAt   DateTime @default(now())
+}
+
+model Vendor {
+  id              String       @id @default(cuid())
+  userId          String       @unique
+  businessName    String
+  vendorType      String       // BOOKSTORE | DISTRIBUTOR | MARKETPLACE | PUBLISHER
+  registrationNo  String?
+  taxId           String?
+  country         String       @default("TZ")
+  status          VendorStatus @default(PENDING)
+  commissionBps   Int?         // per-vendor override; null = platform default
+  createdAt       DateTime     @default(now())
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  books           Book[]
+  inventory       InventoryItem[]
+  payoutRequests  PayoutRequest[]
+  orderItems      OrderItem[]
+  coupons         Coupon[]
+  warehouses      Warehouse[]
+}
+
+model Publisher {
+  id        String   @id @default(cuid())
+  name      String
+  country   String?
+  website   String?
+  logoUrl   String?
+  featured  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  books     Book[]
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  name      String
+  parentId  String?
+  sortOrder Int        @default(0)
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  books     BookCategory[]
+}
+
+model Book {
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  title           String
+  subtitle        String?
+  description     String?    @db.Text
+  isbn            String?    @unique
+  language        String     @default("en")
+  publicationDate DateTime?
+  edition         String?
+  pageCount       Int?
+  tableOfContents String?    @db.Text
+  coverUrl        String?
+  status          BookStatus @default(DRAFT)
+  featured        Boolean    @default(false)
+  vendorId        String?
+  publisherId     String?
+  rejectionReason String?
+  publishedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  vendor          Vendor?    @relation(fields: [vendorId], references: [id])
+  publisher       Publisher? @relation(fields: [publisherId], references: [id])
+  authors         BookAuthor[]
+  categories      BookCategory[]
+  formats         BookFormat[]
+  reviews         Review[]
+  wishlistItems   WishlistItem[]
+  submissions     Submission[]
+  copyrightDecls  CopyrightDeclaration[]
+  relatedFrom    RelatedBook[] @relation("RelatedFrom")
+  relatedTo      RelatedBook[] @relation("RelatedTo")
+
+  @@index([status])
+  @@index([vendorId])
+}
+
+model BookAuthor {
+  bookId    String
+  authorId  String
+  position  Int     @default(0)
+  book      Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author    AuthorProfile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, authorId])
+}
+
+model BookCategory {
+  bookId     String
+  categoryId String
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, categoryId])
+}
+
+model RelatedBook {
+  fromId String
+  toId   String
+  from   Book   @relation("RelatedFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to     Book   @relation("RelatedTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@id([fromId, toId])
+}
+
+model BookFormat {
+  id            String     @id @default(cuid())
+  bookId        String
+  type          FormatType
+  sku           String?    @unique
+  priceMinor    Int
+  currency      String     @default("TZS")
+  isDigital     Boolean    @default(false)
+  filePath      String?    // private storage key, never a public URL
+  sampleFilePath String?
+  book          Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  inventory     InventoryItem[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  libraryEntries LibraryEntry[]
+  priceRules    PriceRule[]
+
+  @@unique([bookId, type])
+}
+
+model PriceRule {
+  id          String     @id @default(cuid())
+  formatId    String
+  currency    String
+  priceMinor  Int
+  countryCode String?
+  format      BookFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@index([formatId, currency])
+}
+
+model Warehouse {
+  id        String  @id @default(cuid())
+  vendorId  String?
+  name      String
+  country   String
+  city      String?
+  vendor    Vendor? @relation(fields: [vendorId], references: [id])
+  inventory InventoryItem[]
+}
+
+model InventoryItem {
+  id          String     @id @default(cuid())
+  formatId    String
+  warehouseId String?
+  vendorId    String?
+  quantity    Int        @default(0)
+  reserved    Int        @default(0)
+  format      BookFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  vendor      Vendor?    @relation(fields: [vendorId], references: [id])
+
+  @@unique([formatId, warehouseId])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  currency  String     @default("TZS")
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+}
+
+model CartItem {
+  id        String     @id @default(cuid())
+  cartId    String
+  formatId  String
+  quantity  Int        @default(1)
+  cart      Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  format    BookFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, formatId])
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  fullName    String
+  phone       String?
+  line1       String
+  line2       String?
+  city        String
+  region      String?
+  postalCode  String?
+  country     String
+  isDefault   Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]
+}
+
+model ShippingZone {
+  id          String   @id @default(cuid())
+  name        String
+  countries   String   // comma-separated ISO codes
+  baseFeeMinor Int
+  perKgMinor  Int      @default(0)
+  currency    String   @default("TZS")
+}
+
+model TaxRate {
+  id        String  @id @default(cuid())
+  country   String  @unique
+  rateBps   Int     // e.g. 1800 = 18%
+  name      String  @default("VAT")
+}
+
+model ExchangeRate {
+  id          String   @id @default(cuid())
+  base        String
+  quote       String
+  rateScaled  Int      // scaled by 1e6
+  updatedAt   DateTime @updatedAt
+
+  @@unique([base, quote])
+}
+
+model Coupon {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  percentBps  Int?
+  amountMinor Int?
+  currency    String?
+  validFrom   DateTime?
+  validUntil  DateTime?
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  vendorId    String?
+  active      Boolean   @default(true)
+  vendor      Vendor?   @relation(fields: [vendorId], references: [id])
+  orders      Order[]
+}
+
+model Order {
+  id              String       @id @default(cuid())
+  number          String       @unique
+  userId          String
+  status          OrderStatus  @default(PENDING_PAYMENT)
+  currency        String
+  subtotalMinor   Int
+  discountMinor   Int          @default(0)
+  shippingMinor   Int          @default(0)
+  taxMinor        Int          @default(0)
+  totalMinor      Int
+  addressId       String?
+  couponId        String?
+  createdAt       DateTime     @default(now())
+  paidAt          DateTime?
+  user            User         @relation(fields: [userId], references: [id])
+  address         Address?     @relation(fields: [addressId], references: [id])
+  coupon          Coupon?      @relation(fields: [couponId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
+  shipments       Shipment[]
+
+  @@index([userId])
+}
+
+model OrderItem {
+  id           String     @id @default(cuid())
+  orderId      String
+  formatId     String
+  vendorId     String?
+  quantity     Int        @default(1)
+  unitPriceMinor Int
+  lineTotalMinor Int
+  commissionMinor Int     @default(0)
+  sellerNetMinor  Int     @default(0)
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  format       BookFormat @relation(fields: [formatId], references: [id])
+  vendor       Vendor?    @relation(fields: [vendorId], references: [id])
+  refundItems  RefundItem[]
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String
+  provider      String
+  providerRef   String?       @unique
+  amountMinor   Int
+  currency      String
+  status        PaymentStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Refund {
+  id          String       @id @default(cuid())
+  orderId     String
+  amountMinor Int
+  reason      String?
+  status      String       @default("REQUESTED")
+  createdAt   DateTime     @default(now())
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  items       RefundItem[]
+}
+
+model RefundItem {
+  id          String    @id @default(cuid())
+  refundId    String
+  orderItemId String
+  amountMinor Int
+  refund      Refund    @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model Shipment {
+  id           String         @id @default(cuid())
+  orderId      String
+  carrier      String?
+  trackingNo   String?
+  status       ShipmentStatus @default(PREPARING)
+  createdAt    DateTime       @default(now())
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model LibraryEntry {
+  id        String     @id @default(cuid())
+  userId    String
+  formatId  String
+  orderId   String?
+  grantedAt DateTime   @default(now())
+  revokedAt DateTime?
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format    BookFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, formatId])
+}
+
+model DownloadEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  formatId  String
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, formatId])
+}
+
+model ReadingProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  locator   String
+  percent   Float    @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  locator   String
+  note      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  rating    Int
+  title     String?
+  body      String?  @db.Text
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model Submission {
+  id          String   @id @default(cuid())
+  bookId      String
+  status      BookStatus @default(SUBMITTED)
+  reviewerId  String?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+model CopyrightDeclaration {
+  id          String   @id @default(cuid())
+  bookId      String
+  declaredBy  String
+  statement   String   @db.Text
+  acceptedAt  DateTime @default(now())
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+model PayoutRequest {
+  id          String       @id @default(cuid())
+  userId      String?
+  vendorId    String?
+  amountMinor Int
+  currency    String
+  status      PayoutStatus @default(REQUESTED)
+  createdAt   DateTime     @default(now())
+  user        User?        @relation(fields: [userId], references: [id])
+  vendor      Vendor?      @relation(fields: [vendorId], references: [id])
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  plan      String
+  status    String   @default("ACTIVE")
+  startedAt DateTime @default(now())
+  endsAt    DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model Campaign {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   // PROMOTION | NEWSLETTER | REFERRAL | AFFILIATE
+  startsAt  DateTime?
+  endsAt    DateTime?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Subscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  confirmedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model PlatformConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  meta       Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("actor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+}

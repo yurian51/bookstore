@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+body {
+  @apply bg-paper text-ink font-sans antialiased;
+}
+.dark body, body.dark {
+  @apply bg-[#141311] text-[#EDE8DE];
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition
+         focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50;
+}
+.btn-primary { @apply btn bg-forest text-white hover:bg-forest-soft; }
+.btn-ghost { @apply btn border border-ink/20 hover:bg-ink/5 dark:border-white/20 dark:hover:bg-white/5; }
+
+.card {
+  @apply rounded-xl border border-ink/10 bg-white/70 dark:border-white/10 dark:bg-white/[0.03];
+}
+
+.book-cover {
+  @apply aspect-[2/3] w-full rounded-md shadow-md transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl;
+  background: linear-gradient(135deg, #1F4D3A 0%, #B8862B 100%);
+}
